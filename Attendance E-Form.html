@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Attendance Form with QR</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f0f4f8;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.4);
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .close-button {
+      position: absolute;
+      top: 15px; right: 15px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #888;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+  <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-gray-200">
+    <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">Attendance Form</h1>
+    <form id="attendanceForm" class="space-y-6">
+      <div>
+        <label for="fullName" class="block text-sm text-gray-700 font-medium mb-1">Full Name</label>
+        <input type="text" id="fullName" required class="w-full px-4 py-2 border rounded-md" />
+      </div>
+      <div>
+        <label for="attendanceDate" class="block text-sm text-gray-700 font-medium mb-1">Date</label>
+        <input type="date" id="attendanceDate" required class="w-full px-4 py-2 border rounded-md" />
+      </div>
+      <div>
+        <label for="attendanceTime" class="block text-sm text-gray-700 font-medium mb-1">Time</label>
+        <input type="time" id="attendanceTime" required class="w-full px-4 py-2 border rounded-md" />
+      </div>
+      <div>
+        <label for="status" class="block text-sm text-gray-700 font-medium mb-1">Status</label>
+        <select id="status" required class="w-full px-4 py-2 border rounded-md">
+          <option value="">Select Status</option>
+          <option value="Present">Present</option>
+          <option value="Absent">Absent</option>
+          <option value="Late">Late</option>
+          <option value="Excused">Excused</option>
+        </select>
+      </div>
+      <button type="button" onclick="startScanner()"
+        class="w-full mt-2 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition transform hover:scale-105">
+        📷 Scan QR Code
+      </button>
+      <div id="loadingIndicator" class="hidden text-center text-blue-500 font-medium mt-3">Submitting...</div>
+    </form>
+  </div>
+
+  <!-- QR Scanner Modal -->
+  <div id="qrScannerModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" onclick="stopScanner()">&times;</span>
+      <p class="text-gray-800 mb-4">Scan your QR Code</p>
+      <div id="reader" style="width: 100%;"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('attendanceForm');
+    const scannerModal = document.getElementById('qrScannerModal');
+    const scanner = new Html5Qrcode("reader");
+    const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyLe080JuAo52sel9WU5PlGo9viVlbdIRPgxhTo8_HzYbSUvBLx12E2-r8aV5D1ISL5/exec";
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      document.getElementById('attendanceDate').value = now.toISOString().split('T')[0];
+      document.getElementById('attendanceTime').value = now.toTimeString().slice(0, 5);
+    });
+
+    function startScanner() {
+      scannerModal.style.display = 'flex';
+      Html5Qrcode.getCameras().then(devices => {
+        if (devices.length) {
+          scanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            qrMessage => {
+              stopScanner();
+              handleSubmitWithCode(qrMessage.trim());
+            },
+            err => console.warn("QR Scan error:", err)
+          );
+        } else {
+          alert("No camera found");
+        }
+      }).catch(err => console.error("Camera error:", err));
+    }
+
+    function stopScanner() {
+      scanner.stop().then(() => {
+        scannerModal.style.display = 'none';
+      }).catch(console.error);
+    }
+
+    function handleSubmitWithCode(code) {
+      document.getElementById("loadingIndicator").classList.remove("hidden");
+
+      const payload = {
+        fullName: document.getElementById("fullName").value,
+        attendanceDate: document.getElementById("attendanceDate").value,
+        attendanceTime: document.getElementById("attendanceTime").value,
+        status: document.getElementById("status").value,
+        controlCode: code
+      };
+
+      fetch(GOOGLE_SHEET_WEB_APP_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(() => {
+        alert("Attendance recorded successfully!");
+        form.reset();
+      }).catch(() => {
+        alert("Something went wrong while submitting.");
+      }).finally(() => {
+        document.getElementById("loadingIndicator").classList.add("hidden");
+      });
+    }
+  </script>
+</body>
+</html>
